@@ -37,7 +37,7 @@ class HandlerManager extends ChannelInboundHandlerAdapter {
         final String key = ByteBufUtils.readString(input);
         if (CONNECTION.handlers.containsKey(key)) {
             final HandlerContainer handler = CONNECTION.handlers.get(key);
-            final FPNTContainer container = new FPNTContainer(CONNECTION.getExpanders());
+            final FPNTContainer container = new FPNTContainer(CONNECTION.expanders());
             FPNTDecoder.decode(new ByteBufReader(input), container);
             handler.handle(CONNECTION, container);
         }

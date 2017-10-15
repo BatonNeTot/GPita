@@ -57,24 +57,36 @@ public class Connection {
         handlers.remove(key);
     }
 
-    void setExpanders(@NotNull final Set<FPNTExpander> expanders) {
+    void expanders(@NotNull final Set<FPNTExpander> expanders) {
         this.expanders = expanders;
     }
 
-    Set<FPNTExpander> getExpanders() {
-        return Collections.EMPTY_SET;
+    Set<FPNTExpander> expanders() {
+        return expanders;
     }
 
-    public void setActive(HandlerConnection active) {
+    public void active(HandlerConnection active) {
         this.active = active;
     }
 
-    public void setInactive(HandlerConnection inactive) {
+    public HandlerConnection active() {
+        return active;
+    }
+
+    public void inactive(HandlerConnection inactive) {
         this.inactive = inactive;
     }
 
-    public void setException(HandlerException exception) {
+    public HandlerConnection inactive() {
+        return inactive;
+    }
+
+    public void exception(HandlerException exception) {
         this.exception = exception;
+    }
+
+    public HandlerException exception() {
+        return exception;
     }
 
     public boolean isAlive() {
