@@ -8,7 +8,7 @@ class ServerHandlerManager extends HandlerManager {
     private final Server SERVER;
 
     ServerHandlerManager(@NotNull final Server server, @NotNull final Connection connection) {
-        super(connection, server.needToPrintExceptions.get());
+        super(connection, server.printExceptions.get());
         this.SERVER = server;
     }
 

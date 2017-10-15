@@ -22,7 +22,7 @@ public class Connection {
     private final Channel channel;
 
     final Map<String, HandlerContainer> handlers = new ConcurrentHashMap<>();
-    Handler
+    HandlerConnection
             active = null,
             inactive = null;
     HandlerException
@@ -30,14 +30,14 @@ public class Connection {
 
     Set<FPNTExpander> expanders = null;
 
-    static Connection create(@NotNull final Channel channel, @Nullable final HanlderMapInitializer initializer, @Nullable final HandlerCreator active, @Nullable final HandlerCreator inactive, @Nullable final HandlerExceptionCreator exception) {
+    static Connection create(@NotNull final Channel channel, @Nullable final HanlderMapInitializer initializer, @Nullable final HandlerConnectionCreator active, @Nullable final HandlerConnectionCreator inactive, @Nullable final HandlerExceptionCreator exception) {
         final Map<String, HandlerContainer> handlerMap = new HashMap<>();
         if (initializer != null)
             initializer.createHandlerMap(handlerMap);
         return new Connection(channel, handlerMap, (active == null ? null : active.createHandler()), (inactive == null ? null : inactive.createHandler()), (exception == null ? null : exception.createHandler()));
     }
 
-    private Connection(@NotNull final Channel channel, @NotNull final Map<String, HandlerContainer> handlers, @Nullable final Handler active, @Nullable final Handler inactive, @Nullable final HandlerException exception) {
+    private Connection(@NotNull final Channel channel, @NotNull final Map<String, HandlerContainer> handlers, @Nullable final HandlerConnection active, @Nullable final HandlerConnection inactive, @Nullable final HandlerException exception) {
         this.channel = channel;
         this.handlers.putAll(handlers);
         this.active = active;
@@ -65,11 +65,11 @@ public class Connection {
         return Collections.EMPTY_SET;
     }
 
-    public void setActive(Handler active) {
+    public void setActive(HandlerConnection active) {
         this.active = active;
     }
 
-    public void setInactive(Handler inactive) {
+    public void setInactive(HandlerConnection inactive) {
         this.inactive = inactive;
     }
 

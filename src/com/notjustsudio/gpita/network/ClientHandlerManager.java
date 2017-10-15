@@ -8,7 +8,7 @@ class ClientHandlerManager extends HandlerManager {
     private final Client CLIENT;
 
     ClientHandlerManager(@NotNull final Client client, @NotNull final Connection connection) {
-        super(connection, client.needToPrintExceptions.get());
+        super(connection, client.printExceptions.get());
         this.CLIENT = client;
     }
 

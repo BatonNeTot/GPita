@@ -22,8 +22,8 @@ public class Client {
 
     public final int PORT;
     public final String HOST;
-    private final LockBoolean needToPrintLogs = new LockBoolean(false);
-    final LockBoolean needToPrintExceptions = new LockBoolean(false);
+    private final LockBoolean printLogs = new LockBoolean(false);
+    final LockBoolean printExceptions = new LockBoolean(false);
 
     private final LockBoolean isConnected = new LockBoolean(false);
 
@@ -31,7 +31,7 @@ public class Client {
     private Connection connection = null;
 
     private HanlderMapInitializer initializer = null;
-    private HandlerCreator
+    private HandlerConnectionCreator
             active = null,
             inactive = null;
     private HandlerExceptionCreator
@@ -68,7 +68,7 @@ public class Client {
         }
     }
 
-    public Connection getConnection() {
+    public Connection connection() {
         connectionLock.lock();
         try {
             return connection;
@@ -94,7 +94,7 @@ public class Client {
                         @Override
                         public void initChannel(SocketChannel ch) throws Exception {
                             ChannelPipeline p = ch.pipeline();
-                            if (needToPrintLogs.get())
+                            if (printLogs.get())
                                 p.addLast(new LoggingHandler(LogLevel.INFO));
                             final Connection connection = Connection.create(ch, initializer, active, inactive, exception);
                             connection.expanders = expanders;
@@ -123,69 +123,69 @@ public class Client {
         return this;
     }
 
-    public Client setNeedToPrintExceptions(@NotNull final boolean needToPrintExceptions) {
+    public Client printExceptions(@NotNull final boolean printExceptions) {
         if (!isConnected()) {
-            this.needToPrintExceptions.set(needToPrintExceptions);
+            this.printExceptions.set(printExceptions);
         }
         return this;
     }
 
-    public boolean needToPrintExceptions() {
-        return needToPrintExceptions.get();
+    public boolean printExceptions() {
+        return printExceptions.get();
     }
 
-    public Client setNeedToPrintLogs(@NotNull final boolean needToPrintLogs) {
+    public Client printLogs(@NotNull final boolean printLogs) {
         if (!isConnected()) {
-            this.needToPrintLogs.set(needToPrintLogs);
+            this.printLogs.set(printLogs);
         }
         return this;
     }
 
-    public boolean needToPrintLogs() {
-        return needToPrintLogs.get();
+    public boolean printLogs() {
+        return printLogs.get();
     }
 
-    public Client setMapInitializer(@NotNull final HanlderMapInitializer initializer) {
+    public Client map(@NotNull final HanlderMapInitializer initializer) {
         if (!isConnected()) {
             this.initializer = initializer;
         }
         return this;
     }
 
-    public HanlderMapInitializer getMapInitializer() {
+    public HanlderMapInitializer map() {
         return initializer;
     }
 
-    public Client setActiveInitializer(@NotNull final HandlerCreator initializer) {
+    public Client active(@NotNull final HandlerConnectionCreator initializer) {
         if (!isConnected()) {
             this.active = initializer;
         }
         return this;
     }
 
-    public HandlerCreator getActiveInitializer() {
+    public HandlerConnectionCreator active() {
         return active;
     }
 
-    public Client setInactiveInitializer(@NotNull final HandlerCreator initializer) {
+    public Client inactive(@NotNull final HandlerConnectionCreator initializer) {
         if (!isConnected()) {
             this.inactive = initializer;
         }
         return this;
     }
 
-    public HandlerCreator getInactiveInitializer() {
+    public HandlerConnectionCreator inactive() {
         return inactive;
     }
 
-    public Client setExceptionInitializer(@NotNull final HandlerExceptionCreator initializer) {
+    public Client exception(@NotNull final HandlerExceptionCreator initializer) {
         if (!isConnected()) {
             this.exception = initializer;
         }
         return this;
     }
 
-    public HandlerExceptionCreator getExceptionInitializer() {
+    public HandlerExceptionCreator exception() {
         return exception;
     }
 

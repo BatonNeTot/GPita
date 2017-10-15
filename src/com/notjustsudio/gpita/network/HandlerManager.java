@@ -12,11 +12,11 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 class HandlerManager extends ChannelInboundHandlerAdapter {
 
     protected final Connection CONNECTION;
-    private final boolean NEED_TO_PRINT_EXCEPTIONS;
+    private final boolean PRINT_EXCEPTIONS;
 
     HandlerManager(@NotNull final Connection connection, @NotNull final boolean exceptions) {
         this.CONNECTION = connection;
-        this.NEED_TO_PRINT_EXCEPTIONS = exceptions;
+        this.PRINT_EXCEPTIONS = exceptions;
     }
 
     @Override
@@ -47,7 +47,7 @@ class HandlerManager extends ChannelInboundHandlerAdapter {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        if (NEED_TO_PRINT_EXCEPTIONS)
+        if (PRINT_EXCEPTIONS)
             cause.printStackTrace();
         if (CONNECTION.exception != null)
             CONNECTION.exception.handle(CONNECTION, cause);

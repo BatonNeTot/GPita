@@ -21,8 +21,8 @@ import java.util.concurrent.locks.ReentrantLock;
 public class Server implements Runnable {
 
     public final int PORT;
-    private final LockBoolean needToPrintLogs = new LockBoolean(true);
-    final LockBoolean needToPrintExceptions = new LockBoolean(false);
+    private final LockBoolean printLogs = new LockBoolean(true);
+    final LockBoolean printExceptions = new LockBoolean(false);
     final LockInteger threshold = new LockInteger(0);
     final LockInteger count = new LockInteger(0);
 
@@ -34,9 +34,12 @@ public class Server implements Runnable {
     private Channel serverChannel = null;
 
     private HanlderMapInitializer initializer = null;
-    private HandlerCreator
+    private HandlerConnectionCreator
             active = null,
             inactive = null;
+    private Handler
+            started = null,
+            stopped = null;
     private HandlerExceptionCreator
             exception = null;
 
@@ -50,56 +53,78 @@ public class Server implements Runnable {
         return isRunning.get();
     }
 
-    public Server setMapInitializer(@NotNull final HanlderMapInitializer initializer) {
+    public Server map(@NotNull final HanlderMapInitializer initializer) {
         if (!isRunning()) {
             this.initializer = initializer;
         }
         return this;
     }
 
-    public HanlderMapInitializer getMapInitializer() {
+    public HanlderMapInitializer map() {
         return initializer;
     }
 
-    public Server setActiveInitializer(@NotNull final HandlerCreator initializer) {
+    public Server active(@NotNull final HandlerConnectionCreator initializer) {
         if (!isRunning()) {
             this.active = initializer;
         }
         return this;
     }
 
-    public HandlerCreator getActiveInitializer() {
+    public HandlerConnectionCreator active() {
         return active;
     }
 
-    public Server setInactiveInitializer(@NotNull final HandlerCreator initializer) {
+    public Server inactive(@NotNull final HandlerConnectionCreator initializer) {
         if (!isRunning()) {
             this.inactive = initializer;
         }
         return this;
     }
 
-    public HandlerCreator getInactiveInitializer() {
+    public HandlerConnectionCreator inactive() {
         return inactive;
     }
 
-    public Server setExceptionInitializer(@NotNull final HandlerExceptionCreator initializer) {
+    public Server started(@NotNull final Handler handler) {
+        if (!isRunning()) {
+            this.started = handler;
+        }
+        return this;
+    }
+
+    public Handler started() {
+        return started;
+    }
+
+    public Server stopped(@NotNull final Handler handler) {
+        if (!isRunning()) {
+            this.stopped = handler;
+        }
+        return this;
+    }
+
+    public Handler stopped() {
+        return stopped;
+    }
+
+    public Server exception(@NotNull final HandlerExceptionCreator initializer) {
         if (!isRunning()) {
             this.exception = initializer;
         }
         return this;
     }
 
-    public HandlerExceptionCreator getExceptionInitializer() {
+    public HandlerExceptionCreator exception() {
         return exception;
     }
 
-    public Server setThreshold(@NotNull final int count) {
+    public Server threshold(@NotNull final int count) {
         this.threshold.set(count);
         return this;
     }
 
-    public int getThreshold() {
+    public int threshold() {
         return this.threshold.get();
     }
 
@@ -108,7 +133,7 @@ public class Server implements Runnable {
         try {
             if (serverChannel != null)
                 serverChannel.close();
-        }finally {
+        } finally {
             serverChannelLock.unlock();
         }
     }
@@ -139,7 +164,7 @@ public class Server implements Runnable {
                         }
                     });
 
-            if (needToPrintLogs.get())
+            if (printLogs.get())
                 b.handler(new LoggingHandler(LogLevel.INFO));
 
             // Start the server.
@@ -149,6 +174,8 @@ public class Server implements Runnable {
                 serverChannel = f.channel();
             } finally {
                 serverChannelLock.unlock();
+                if (started != null)
+                    started.handle();
             }
 
             // Wait until the server socket is closed.
@@ -159,6 +186,8 @@ public class Server implements Runnable {
                 serverChannel = null;
             } finally {
                 serverChannelLock.unlock();
+                if (stopped != null)
+                    stopped.handle();
             }
 
         } catch (InterruptedException e) {
@@ -180,7 +209,7 @@ public class Server implements Runnable {
         return new HashSet<>(CONNECTIONS);
     }
 
-    public int getConnectionCount() {
+    public int connectionCount() {
         return count.get();
     }
 
@@ -189,25 +218,25 @@ public class Server implements Runnable {
         return this;
     }
 
-    public Server setNeedToPrintExceptions(@NotNull final boolean needToPrintExceptions) {
+    public Server printExceptions(@NotNull final boolean printExceptions) {
         if (!isRunning()) {
-            this.needToPrintExceptions.set(needToPrintExceptions);
+            this.printExceptions.set(printExceptions);
         }
         return this;
     }
 
-    public boolean needToPrintExceptions() {
-        return needToPrintExceptions.get();
+    public boolean printExceptions() {
+        return printExceptions.get();
     }
 
-    public Server setNeedToPrintLogs(@NotNull final boolean needToPrintLogs) {
+    public Server printLogs(@NotNull final boolean printLogs) {
         if (!isRunning()) {
-            this.needToPrintLogs.set(needToPrintLogs);
+            this.printLogs.set(printLogs);
         }
         return this;
     }
 
-    public boolean needToPrintLogs() {
-        return needToPrintLogs.get();
+    public boolean printLogs() {
+        return printLogs.get();
     }
 }
