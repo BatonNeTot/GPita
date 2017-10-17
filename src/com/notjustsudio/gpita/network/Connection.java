@@ -10,6 +10,7 @@ import com.sun.istack.internal.Nullable;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelId;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,8 +46,8 @@ public class Connection {
         this.exception = exception;
     }
 
-    public Channel getChannel() {
-        return channel;
+    public ChannelId id() {
+        return channel.id();
     }
 
     public void addHandler(@NotNull final String key, @NotNull final HandlerContainer handler) {

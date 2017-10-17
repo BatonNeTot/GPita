@@ -4,8 +4,8 @@ import com.notjuststudio.fpnt.FPNTContainer;
 import com.notjuststudio.fpnt.FPNTExpander;
 import com.notjuststudio.thread.ConcurrentHashSet;
 import com.notjustsudio.gpita.thread.LockBoolean;
+import com.notjustsudio.gpita.thread.LockInteger;
 import com.sun.istack.internal.NotNull;
-import com.sun.istack.internal.Nullable;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -15,20 +15,32 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class Client {
+public class Client implements Callable<Boolean> {
 
-    public final int PORT;
-    public final String HOST;
+    private final Lock statusLock = new ReentrantLock();
+    private int status = READY;
+
+    public static final int
+            READY = 0,
+            CONNECTING = 1,
+            CONNECTED = 2,
+            CLOSING = 3;
+
+    public final LockInteger port;
+    private String host;
     private final LockBoolean printLogs = new LockBoolean(false);
     final LockBoolean printExceptions = new LockBoolean(false);
 
-    private final LockBoolean isConnected = new LockBoolean(false);
+    private Set<FPNTExpander> expanders = new ConcurrentHashSet<>();
 
-    private final Lock connectionLock = new ReentrantLock();
     private Connection connection = null;
+
+    private EventLoopGroup
+            group;
 
     private HanlderMapInitializer initializer = null;
     private HandlerConnectionCreator
@@ -37,54 +49,54 @@ public class Client {
     private HandlerExceptionCreator
             exception = null;
 
-    private Set<FPNTExpander> expanders = new ConcurrentHashSet<>();
-
-    public boolean isConnected() {
-        return isConnected.get();
-    }
-
     public Client(@NotNull final String host, @NotNull final int port) {
-        this.PORT = port;
-        this.HOST = host;
-    }
-
-    public void close() {
-        connectionLock.lock();
-        try {
-            if (connection == null)
-                return;
-            connection.close();
-        } finally {
-            connectionLock.unlock();
-        }
-    }
-
-    void setConnection(@Nullable final Connection connection) {
-        connectionLock.lock();
-        try {
-            this.connection = connection;
-        } finally {
-            connectionLock.unlock();
-        }
+        this.port = new LockInteger(port);
+        this.host = host;
     }
 
     public Connection connection() {
-        connectionLock.lock();
+        statusLock.lock();
         try {
-            return connection;
+            if (status == CONNECTED)
+                return connection;
+            throw new IllegalStateException("Connection hasn't yet been established");
         } finally {
-            connectionLock.unlock();
+            statusLock.unlock();
         }
     }
 
-    public void connect() {
-        if (isConnected())
-            return;
-        isConnected.set(true);
+    public Client addFPNTExpanders(@NotNull final Set<FPNTExpander> expanders) {
+        this.expanders.addAll(expanders);
+        return this;
+    }
 
-        final Client client = this;
+    public int status() {
+        statusLock.lock();
+        try {
+            return status;
+        } finally {
+            statusLock.unlock();
+        }
+    }
 
-        EventLoopGroup group = new NioEventLoopGroup();
+    public boolean isConnected() {
+        return status() == CONNECTED;
+    }
+
+    @Override
+    public Boolean call() throws Exception {
+        statusLock.lock();
+        try {
+            if (status != READY) {
+                return false;
+            } else {
+                status = CONNECTING;
+            }
+        } finally {
+            statusLock.unlock();
+        }
+
+        group = new NioEventLoopGroup();
         try {
             Bootstrap b = new Bootstrap();
             b.group(group)
@@ -96,58 +108,104 @@ public class Client {
                             ChannelPipeline p = ch.pipeline();
                             if (printLogs.get())
                                 p.addLast(new LoggingHandler(LogLevel.INFO));
-                            final Connection connection = Connection.create(ch, initializer, active, inactive, exception);
+                            connection = Connection.create(ch, initializer, active, inactive, exception);
                             connection.expanders = expanders;
-                            final ClientHandlerManager handlerManager = new ClientHandlerManager(client, connection);
+                            final HandlerManager handlerManager = new HandlerManager(connection, printExceptions.get());
                             p.addLast(handlerManager);
                         }
                     });
 
             // Start the client.
-            ChannelFuture f = b.connect(HOST, PORT).sync();
+            ChannelFuture f = b.connect(host, port.get()).sync();
 
-            // Wait until the connection is closed.
-            f.channel().closeFuture().sync();
+            statusLock.lock();
+            try {
+                status = CONNECTED;
+            } finally {
+                statusLock.unlock();
+            }
 
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            new Thread(() -> {
+                try {
+                    // Wait until the connection is closed.
+                    f.channel().closeFuture().sync();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } finally {
+                    clearUp();
+                }
+            }).start();
+
+            return true;
+
+        } catch (Throwable t) {
+            if (printExceptions.get())
+                t.printStackTrace();
+            clearUp();
+            return false;
+        }
+    }
+
+    public void close() {
+        statusLock.lock();
+        try {
+            if (status == CONNECTED)
+                connection.close();
         } finally {
-            // Shut down the event loop to terminate all threads.
-            group.shutdownGracefully();
-            isConnected.set(false);
+            statusLock.unlock();
         }
     }
 
-    public Client addFPNTExpanders(@NotNull final Set<FPNTExpander> expanders) {
-        this.expanders.addAll(expanders);
-        return this;
+    private void clearUp() {
+        group.shutdownGracefully();
+        connection = null;
+
+        statusLock.lock();
+        try {
+            status = READY;
+        } finally {
+            statusLock.unlock();
+        }
+
     }
 
-    public Client printExceptions(@NotNull final boolean printExceptions) {
-        if (!isConnected()) {
-            this.printExceptions.set(printExceptions);
+    public Client host(@NotNull final String host) {
+        statusLock.lock();
+        try {
+            if (status == READY)
+                this.host = host;
+        } finally {
+            statusLock.unlock();
         }
         return this;
     }
 
-    public boolean printExceptions() {
-        return printExceptions.get();
+    public String host() {
+        return host;
     }
 
-    public Client printLogs(@NotNull final boolean printLogs) {
-        if (!isConnected()) {
-            this.printLogs.set(printLogs);
+    public Client port(@NotNull final int port) {
+        statusLock.lock();
+        try {
+            if (status == READY)
+                this.port.set(port);
+        } finally {
+            statusLock.unlock();
         }
         return this;
     }
 
-    public boolean printLogs() {
-        return printLogs.get();
+    public int port() {
+        return port.get();
     }
 
     public Client map(@NotNull final HanlderMapInitializer initializer) {
-        if (!isConnected()) {
-            this.initializer = initializer;
+        statusLock.lock();
+        try {
+            if (status == READY)
+                this.initializer = initializer;
+        } finally {
+            statusLock.unlock();
         }
         return this;
     }
@@ -157,8 +215,12 @@ public class Client {
     }
 
     public Client active(@NotNull final HandlerConnectionCreator initializer) {
-        if (!isConnected()) {
-            this.active = initializer;
+        statusLock.lock();
+        try {
+            if (status == READY)
+                this.active = initializer;
+        } finally {
+            statusLock.unlock();
         }
         return this;
     }
@@ -168,8 +230,12 @@ public class Client {
     }
 
     public Client inactive(@NotNull final HandlerConnectionCreator initializer) {
-        if (!isConnected()) {
-            this.inactive = initializer;
+        statusLock.lock();
+        try {
+            if (status == READY)
+                this.inactive = initializer;
+        } finally {
+            statusLock.unlock();
         }
         return this;
     }
@@ -179,8 +245,12 @@ public class Client {
     }
 
     public Client exception(@NotNull final HandlerExceptionCreator initializer) {
-        if (!isConnected()) {
-            this.exception = initializer;
+        statusLock.lock();
+        try {
+            if (status == READY)
+                this.exception = initializer;
+        } finally {
+            statusLock.unlock();
         }
         return this;
     }
@@ -189,14 +259,33 @@ public class Client {
         return exception;
     }
 
-    public void send(@NotNull final String target, @NotNull final FPNTContainer container) {
-        connectionLock.lock();
+    public Client printLogs(@NotNull final boolean printLogs) {
+        statusLock.lock();
         try {
-            if (connection == null)
-                return;
-            connection.send(target, container);
+            if (status == READY)
+                this.printLogs.set(printLogs);
         } finally {
-            connectionLock.unlock();
+            statusLock.unlock();
         }
+        return this;
+    }
+
+    public boolean printLogs() {
+        return printLogs.get();
+    }
+
+    public Client printExceptions(@NotNull final boolean printExceptions) {
+        statusLock.lock();
+        try {
+            if (status == READY)
+                this.printExceptions.set(printExceptions);
+        } finally {
+            statusLock.unlock();
+        }
+        return this;
+    }
+
+    public boolean printExceptions() {
+        return printExceptions.get();
     }
 }
